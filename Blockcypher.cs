@@ -20,19 +20,23 @@ using Org.BouncyCastle.Math.EC;
 
 #endregion
 
-namespace BlockCypher {
-    public class Blockcypher {
+namespace BlockCypher
+{
+    public class Blockcypher
+    {
         public Uri BaseUrl { get; set; }
         public Endpoint Endpoint { get; set; }
         public bool EnsureSuccessStatusCode { get; set; }
         public int ThrottleRequests { get; set; }
         public string UserToken { get; set; }
 
-        public Blockcypher(string token = "", Endpoint endpoint = Endpoint.BtcMain) {
+        public Blockcypher(string token = "", Endpoint endpoint = Endpoint.BtcMain)
+        {
             UserToken = token;
             Endpoint = endpoint;
 
-            switch (endpoint) {
+            switch (endpoint)
+            {
                 case Endpoint.BcyTest:
                     BaseUrl = new Uri("https://api.blockcypher.com/v1/bcy/test");
                     break;
@@ -59,25 +63,36 @@ namespace BlockCypher {
             }
         }
 
-        public Task<Faucet> Faucet(string address, Satoshi amount) {
+        public Task<Faucet> Faucet(string address, Satoshi amount)
+        {
             if (Endpoint != Endpoint.BcyTest)
                 throw new Exception("Invalid endpoint: faucet is only allowed for BcyTest");
 
-            return PostAsync<Faucet>("faucet", new {
+            return PostAsync<Faucet>("faucet", new
+            {
                 address,
-                amount = (int) amount.Value
+                amount = (int)amount.Value
             });
         }
 
-        public Task<AddressInfo> GenerateAddress() {
+        public Task<AddressInfo> GenerateAddress()
+        {
             return PostAsync<AddressInfo>("addrs", null);
         }
 
-        public Task<HookInfo> GenerateHook(string address, HookEvent hook, string url) {
-            try {
+        public Task<HDWallet> DeriveAddress(string walletName)
+        {
+            return PostAsync<HDWallet>($"wallets/hd/{walletName}/addresses/derive?token={UserToken}", null);
+        }
+
+        public Task<HookInfo> GenerateHook(string address, HookEvent hook, string url)
+        {
+            try
+            {
                 string evt = "";
 
-                switch (hook) {
+                switch (hook)
+                {
                     case HookEvent.ConfirmedTransaction:
                         evt = "confirmed-tx";
                         break;
@@ -99,27 +114,34 @@ namespace BlockCypher {
                         break;
                 }
 
-                return PostAsync<HookInfo>("hooks", new {
+                return PostAsync<HookInfo>("hooks", new
+                {
                     @event = evt,
                     url,
                     address
                 });
-            } catch {
-                return Task.Factory.StartNew(() => new HookInfo {
+            }
+            catch
+            {
+                return Task.Factory.StartNew(() => new HookInfo
+                {
                     Error = "Hook already exists"
                 });
             }
         }
 
-        public Task<AddressBalance> GetBalanceForAddress(string address) {
+        public Task<AddressBalance> GetBalanceForAddress(string address)
+        {
             return GetAsync<AddressBalance>(string.Format("addrs/{0}", address));
         }
 
-        public IEnumerable<Task<AddressBalance>> GetBalanceForAddresses(params string[] addresses) {
+        public IEnumerable<Task<AddressBalance>> GetBalanceForAddresses(params string[] addresses)
+        {
             return addresses.Select(GetBalanceForAddress);
         }
 
-        private static byte[] GetBytesFromBase58Key(string privateKey) {
+        private static byte[] GetBytesFromBase58Key(string privateKey)
+        {
             var tmp = Base58Helper.DecodeWithCheckSum(privateKey);
             var bytes = new byte[tmp.Length - 1];
 
@@ -128,25 +150,29 @@ namespace BlockCypher {
             return bytes;
         }
 
-        public Task<Transaction[]> GetTransactions(AddressInfo fromAddress) {
+        public Task<Transaction[]> GetTransactions(AddressInfo fromAddress)
+        {
             return GetTransactions(fromAddress.Public);
         }
 
-        public async Task<Transaction[]> GetTransactions(string fromAddress) {
+        public async Task<Transaction[]> GetTransactions(string fromAddress)
+        {
             var addressInfo = await GetBalanceForAddress(fromAddress);
 
             if (addressInfo.Transactions == null)
                 return new Transaction[0];
 
             var txs = addressInfo.Transactions.Select(t => t.TxHash).Distinct().ToArray();
-            var groups = txs.Select((x, i) => new {
+            var groups = txs.Select((x, i) => new
+            {
                 Key = i / 40,
                 Value = x
             }).GroupBy(x => x.Key, x => x.Value, (k, g) => g.ToArray()).ToArray();
 
             var list = new List<Transaction>();
 
-            foreach (string url in groups.Select(g => string.Format("txs/{0}", string.Join(";", g)))) {
+            foreach (string url in groups.Select(g => string.Format("txs/{0}", string.Join(";", g))))
+            {
                 var transactions = await GetAsync<Transaction[]>(url);
 
                 if (transactions != null)
@@ -156,7 +182,8 @@ namespace BlockCypher {
             return list.OrderBy(t => t.Confirmed).ToArray();
         }
 
-        private Task<UnsignedTransaction> processSend(UnsignedTransaction unsignedTx, string fromPrivate) {
+        private Task<UnsignedTransaction> processSend(UnsignedTransaction unsignedTx, string fromPrivate)
+        {
             if (unsignedTx.IsError)
                 return Task.FromResult(unsignedTx);
 
@@ -173,13 +200,16 @@ namespace BlockCypher {
             return PostAsync<UnsignedTransaction>("txs/send", unsignedTx);
         }
 
-        public Task<UnsignedTransaction> Send(AddressInfo fromAddress, AddressInfo toAddress, Satoshi amount) {
+        public Task<UnsignedTransaction> Send(AddressInfo fromAddress, AddressInfo toAddress, Satoshi amount)
+        {
             return Send(fromAddress.Address, toAddress.Address, fromAddress.Private, fromAddress.Public, amount);
         }
 
         public async Task<UnsignedTransaction> Send(string fromAddress, string toAddress, string fromPrivate,
-                                                    string fromPublic, Satoshi amount) {
-            var unsignedTx = await PostAsync<UnsignedTransaction>("txs/new", new BasicTransaction {
+                                                    string fromPublic, Satoshi amount)
+        {
+            var unsignedTx = await PostAsync<UnsignedTransaction>("txs/new", new BasicTransaction
+            {
                 Inputs = new[] {
                     new TxInput {
                         Addresses = new[] {
@@ -201,8 +231,10 @@ namespace BlockCypher {
         }
 
         public async Task<UnsignedTransaction> SendMany(string fromAddress, string fromPrivate, string fromPublic,
-                                                        List<SendingHolder> sendTo) {
-            var unsignedTx = await PostAsync<UnsignedTransaction>("txs/new", new BasicTransaction {
+                                                        List<SendingHolder> sendTo)
+        {
+            var unsignedTx = await PostAsync<UnsignedTransaction>("txs/new", new BasicTransaction
+            {
                 Inputs = new[] {
                     new TxInput {
                         Addresses = new[] {
@@ -217,11 +249,13 @@ namespace BlockCypher {
         }
 
         private static void Sign(UnsignedTransaction unsignedTransaction, string privateKey, bool isHex, bool addPubKey,
-                                 bool forceCompressed = false) {
+                                 bool forceCompressed = false)
+        {
             bool compressed = false;
             var bytes = isHex ? privateKey.FromHexString() : GetBytesFromBase58Key(privateKey);
 
-            if (bytes.Length == 33 && bytes[32] == 1) {
+            if (bytes.Length == 33 && bytes[32] == 1)
+            {
                 compressed = true;
                 bytes = bytes.Take(32).ToArray();
             }
@@ -241,7 +275,8 @@ namespace BlockCypher {
             var privKey = new ECPrivateKeyParameters(privKeyB, curve);
             signer.Init(true, privKey);
 
-            foreach (string toSign in unsignedTransaction.ToSign) {
+            foreach (string toSign in unsignedTransaction.ToSign)
+            {
                 if (addPubKey)
                     unsignedTransaction.PubKeys.Add(publicKey.ToHexString());
 
@@ -253,7 +288,8 @@ namespace BlockCypher {
                     s = curve.N.Subtract(s);
 
                 using (var ms = new MemoryStream())
-                using (var asn = new Asn1OutputStream(ms)) {
+                using (var asn = new Asn1OutputStream(ms))
+                {
                     var seq = new DerSequenceGenerator(asn);
                     seq.AddObject(new DerInteger(r));
                     seq.AddObject(new DerInteger(s));
@@ -267,12 +303,15 @@ namespace BlockCypher {
             }
         }
 
-        public class SendingHolder {
+        public class SendingHolder
+        {
             public Satoshi Value { get; set; }
             public string Wallet { get; set; }
 
-            public TxOutput ToTxn() {
-                return new TxOutput {
+            public TxOutput ToTxn()
+            {
+                return new TxOutput
+                {
                     Addresses = new[] {
                         Wallet
                     },
@@ -282,7 +321,8 @@ namespace BlockCypher {
         }
 
         #region Helpers
-        internal async Task<T> GetAsync<T>(string url) {
+        internal async Task<T> GetAsync<T>(string url)
+        {
             var client = GetClient();
 
             var response = await client.GetAsync(string.Format("{0}/{1}", BaseUrl, url));
@@ -298,7 +338,8 @@ namespace BlockCypher {
             return content.FromJson<T>();
         }
 
-        internal HttpClient GetClient() {
+        internal HttpClient GetClient()
+        {
             var client = new HttpClient();
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
@@ -308,7 +349,8 @@ namespace BlockCypher {
         public static bool EnableLogging = true;
         public string LastResponse;
 
-        internal async Task<T> PostAsync<T>(string url, object obj) where T : new() {
+        internal async Task<T> PostAsync<T>(string url, object obj) where T : new()
+        {
             var client = GetClient();
 
             string targetUrl = string.Format("{0}/{1}", BaseUrl, url);

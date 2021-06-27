@@ -45,6 +45,9 @@
     <Compile Include="Objects\BaseObject.cs" />
     <Compile Include="Objects\BasicTransaction.cs" />
     <Compile Include="Objects\Faucet.cs" />
+    <Compile Include="Objects\HDAddress.cs" />
+    <Compile Include="Objects\HDChain.cs" />
+    <Compile Include="Objects\HDWallet.cs" />
     <Compile Include="Objects\HookInfo.cs" />
     <Compile Include="Objects\Input.cs" />
     <Compile Include="Objects\Output.cs" />
